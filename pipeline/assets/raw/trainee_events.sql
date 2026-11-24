@@ -10,7 +10,7 @@ columns:
   - name: kind
     checks: [{name: accepted_values, value: [hypothesis, action]}]
 @bruin */
-select * from read_csv('logs/trainee_events.csv', header = true, columns = {
+select * from read_csv('logs/trainee_events.csv', header = true, delim = ',', quote = '"', escape = '"', columns = {
   'event_id': 'VARCHAR', 'session_id': 'VARCHAR', 'attempt': 'INTEGER', 'scenario': 'INTEGER',
   'ts': 'TIMESTAMP', 'kind': 'VARCHAR', 'code': 'VARCHAR', 'hypothesis_id': 'VARCHAR',
   'ruled_out_id': 'VARCHAR', 'solution_id': 'VARCHAR', 'text': 'VARCHAR', 'reading_id': 'INTEGER'})

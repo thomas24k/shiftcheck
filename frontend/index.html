@@ -233,6 +233,7 @@ async function finish(){
   $("#finish").disabled=false; $("#finish").textContent="End shift & get scored";
 }
 const DIMS=[["diagnosis","Diagnosis"],["ruled_out","Ruled-out alternatives"],["evidence","Use of evidence"],["fix_choice","Fix choice"],["safety_verification","Safety & verification"]];
+const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./,""); } catch(e) { return u; } };
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function showResult(d){
   const v=d.verdict, s=d.scores;
@@ -243,10 +244,10 @@ function showResult(d){
     <p class="ev">Attempt ${v.attempt} · scenario ${v.scenario} · scored by Bruin (${d.bruin_ok?"all quality checks passed":"some checks failed"})</p>
     <p class="verdict" style="color:${color}">${v.verdict} · ${v.total}/100</p>
     <div style="margin:14px 0">${DIMS.map(([k,l])=>`<div class="bar"><span>${l}</span><div><i style="width:${s[k]*5}%;background:${s[k]>=15?"var(--ok)":s[k]>=10?"var(--warn)":"var(--bad)"}"></i></div><b class="mono">${s[k]}/20</b></div>`).join("")}</div>
-    ${v.blocked_lines?`<div class="blocked"><b>${v.blocked_lines} unsupported feedback line${v.blocked_lines>1?"s":""} blocked by Bruin</b> (cited evidence that doesn't exist):<br>${d.blocked.map(b=>`<s>${esc(b.agent)}: ${esc(b.message)}</s> <span class="mono">${esc(b.evidence_ref)}</span>`).join("<br>")}</div>`:""}
+    ${v.blocked_lines?`<div class="blocked"><b>${v.blocked_lines} unsupported feedback line${v.blocked_lines>1?"s":""} blocked by Bruin</b> (no real evidence or source behind them):<br>${d.blocked.map(b=>`<s>${esc(b.agent)}: ${esc(b.message)}</s> <span class="mono">(${esc(b.block_reason)})</span>`).join("<br>")}</div>`:""}
     <h3 style="margin:14px 0 4px">Feedback (every line linked to your log)</h3>
-    ${d.feedback.map(f=>`<div class="fb"><b>${esc(f.agent==="rules"?"Playbook":f.agent)}</b> · ${esc(f.dimension)}<br>${esc(f.message)}
-      <div class="ev mono">↳ ${esc(f.evidence_ref)}: ${esc(f.code||"hypothesis "+f.hypothesis_id)} ${f.event_text?"“"+esc(f.event_text)+"”":""} · sensor reading #${esc(f.reading_id)}</div></div>`).join("")}
+    ${d.feedback.map(f=>`<div class="fb"><b>${esc(f.agent==="rules"?"Playbook":f.agent)}</b> · ${esc(f.dimension)}${f.kind==="outside_fact"?" · <i>outside fact</i>":""}<br>${esc(f.message)}
+      <div class="ev mono">↳ ${esc(f.evidence_ref)}: ${esc(f.code||"hypothesis "+f.hypothesis_id)} ${f.event_text?"“"+esc(f.event_text)+"”":""} · sensor reading #${esc(f.reading_id)}</div>${f.source_url?`<div class="ev">↳ source found by Telem: <a href="${esc(f.source_url)}" target="_blank" rel="noopener">${esc(hostOf(f.source_url))}</a></div>`:""}</div>`).join("")}
     <p class="ev" style="margin-top:14px">Progress: ${S.history.map(h=>`attempt ${h.attempt}: ${h.total} (${h.verdict})`).join(" → ")}</p>
     <p class="ev">Weakest skill: <b>${esc(v.weakest_dimension)}</b>. The team will pick your next scenario from it.</p>
     <button class="primary" id="next">Start attempt ${v.attempt+1}</button>`;

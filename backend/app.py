@@ -5,7 +5,7 @@ What this file does, in plain words:
 - Gives the page the sensor timeline and the healthy baseline (both built by Bruin).
 - Receives every hypothesis + action the trainee makes and logs it to logs/trainee_events.csv.
 - Enforces the safety rules itself (no AI involved), so Dana ALWAYS stops unsafe moves.
-- Asks OpenAI to write what Marco, Dana and Frank say. If OpenAI fails, scripted lines are used.
+- Asks Claude to write what Marco, Dana and Frank say. If Claude fails, scripted lines are used.
 - At the end, runs `bruin run` so Bruin scores the session, then returns the verdict + evidence.
 """
 
@@ -32,7 +32,14 @@ AGENT_CSV = LOGS / "agent_feedback.csv"
 BRUIN = os.path.expanduser("~/.local/bin/bruin")
 EVENT_COLS = ["event_id", "session_id", "attempt", "scenario", "ts", "kind", "code",
               "hypothesis_id", "ruled_out_id", "solution_id", "text", "reading_id"]
-AGENT_COLS = ["session_id", "agent", "dimension", "message", "evidence_ref"]
+AGENT_COLS = ["session_id", "agent", "dimension", "message", "evidence_ref", "kind", "source_url"]
+TELEM_CSV = LOGS / "telem_sources.csv"
+TELEM_COLS = ["session_id", "query", "provider", "url", "title", "summary"]
+# What Telem looks up for each fault (outside, expert sources to back the feedback).
+TELEM_QUERIES = {
+    2: "dry unlubricated ball bearing symptoms vibration peak crest factor",
+    3: "over-greased ball bearing symptoms vibration heat churning purge excess grease",
+}
 
 # Which playbook solution each fix button means, per fault state (2 = dry, 3 = excess grease).
 FIX_MAP = {
@@ -51,17 +58,18 @@ SESSIONS: dict[str, dict] = {}
 # ---------- small helpers ----------
 def ensure_logs():
     LOGS.mkdir(exist_ok=True)
-    for path, cols in [(EVENTS_CSV, EVENT_COLS), (AGENT_CSV, AGENT_COLS)]:
+    for path, cols in [(EVENTS_CSV, EVENT_COLS), (AGENT_CSV, AGENT_COLS), (TELEM_CSV, TELEM_COLS)]:
         if not path.exists():
             with open(path, "w", newline="") as f:
-                csv.writer(f).writerow(cols)
+                csv.writer(f, lineterminator="\n").writerow(cols)
 
 
 def append_csv(path, cols, rows):
+    # Plain "\n" line endings and no line breaks inside values, so DuckDB/Bruin can always read the file.
     with open(path, "a", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=cols)
+        w = csv.DictWriter(f, fieldnames=cols, lineterminator="\n")
         for r in rows:
-            w.writerow({c: r.get(c, "") for c in cols})
+            w.writerow({c: " ".join(str(r.get(c, "") or "").split()) for c in cols})
 
 
 def query(sql, params=None):
@@ -100,23 +108,59 @@ Each line max 30 words. Plain English. Return JSON: {"marco": "...", "dana": "..
 
 
 def llm_json(system, user, fallback):
-    key = os.getenv("OPENAI_API_KEY", "").strip()
+    key = os.getenv("ANTHROPIC_API_KEY", "").strip()
     if not key:
         return fallback
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=key, timeout=20)
-        resp = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-            response_format={"type": "json_object"},
-            temperature=0.7,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+        import anthropic
+        client = anthropic.Anthropic(api_key=key, timeout=30.0, max_retries=1)
+        resp = client.messages.create(
+            model=os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5"),
+            max_tokens=4000,
+            output_config={"effort": "low"},  # short dialogue lines: keep replies fast for a live demo
+            system=system + "\nReply with ONLY the JSON object, no other text.",
+            messages=[{"role": "user", "content": user}],
         )
-        data = json.loads(resp.choices[0].message.content)
+        if resp.stop_reason == "refusal":
+            return fallback
+        text = "".join(b.text for b in resp.content if b.type == "text")
+        data = json.loads(text[text.find("{"): text.rfind("}") + 1])
         return {**fallback, **{k: v for k, v in data.items() if isinstance(v, (str, list))}}
     except Exception as e:  # network down, no credit, bad JSON... the demo must go on
         print("LLM fallback:", e)
         return fallback
+
+
+TELEM_CACHE: dict[str, list] = {}
+
+
+def telem_search(sid, queries):
+    """Ask Telem (web search across several providers) for expert sources. Returns [] if it fails."""
+    key = os.getenv("TELEM_API_KEY", "").strip()
+    out, seen = [], set()
+    for q in queries:
+        if q not in TELEM_CACHE:  # same fault = same search; don't pay twice
+            TELEM_CACHE[q] = []
+            if key:
+                try:
+                    import urllib.request
+                    body = {"user_input": {"query": q},
+                            "search": {"providers": {"include": ["exa", "brave"]}, "num_results": 3}}
+                    req = urllib.request.Request("https://router.telem.ai/v1/search", data=json.dumps(body).encode(),
+                                                 headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+                    data = json.loads(urllib.request.urlopen(req, timeout=40).read())
+                    for run in data.get("preprocessor_runs", []):
+                        for x in (run.get("output_payload") or {}).get("results", []):
+                            if x.get("url"):
+                                TELEM_CACHE[q].append({"query": q, "provider": run.get("preprocessor_name", ""),
+                                                       "url": x["url"], "title": x.get("title") or "", "summary": x.get("summary") or ""})
+                except Exception as e:
+                    print("Telem failed:", e)
+        for x in TELEM_CACHE[q]:
+            if x["url"] not in seen:
+                seen.add(x["url"])
+                out.append({"session_id": sid, **x})
+    return out[:6]
 
 
 def reading_summary(r):
@@ -272,13 +316,24 @@ def finish(sid: str):
     ensure_logs()
     append_csv(EVENTS_CSV, EVENT_COLS, s["events"])
 
-    # Agents propose feedback; each line must cite an event id. Bruin will block the unsupported ones.
+    # Telem: fetch outside expert sources about this fault (and about lockout, if the trainee was stopped).
+    queries = [TELEM_QUERIES[s["fault_state"]]]
+    if any(e["code"] == "unsafe_stop" for e in s["events"]):
+        queries.append("lockout tagout before bearing maintenance why injuries")
+    sources = telem_search(sid, queries)
+    append_csv(TELEM_CSV, TELEM_COLS, sources)
+    source_text = "\n".join(f"- {x['url']} | {x['title']} | {x['summary'][:300]}" for x in sources) or "(none)"
+
+    # Agents propose feedback. Every line must cite a logged event; outside facts must also cite a Telem URL.
+    # Bruin blocks any line whose evidence or source does not exist.
     sys_fb = ("You are Marco, Dana and Frank writing end-of-shift feedback for a trainee. "
-              "Write 3 to 5 short feedback lines. Each MUST cite evidence_ref = 'E:<event id>' from the log below. "
+              "Write 3 to 5 short feedback lines. Each MUST cite evidence_ref = 'E:<event id>' from the log. "
+              "Also write 1 or 2 lines of kind 'outside_fact': a fact from the outside sources below that explains why the trainee's "
+              "action was right or wrong; it MUST set source_url to one of the listed URLs, copied exactly. Other lines use kind 'coaching' and source_url ''. "
               'Return JSON {"lines": [{"agent": "Marco|Dana|Frank", "dimension": "diagnosis|ruled_out|evidence|fix_choice|safety_verification", '
-              '"message": "...", "evidence_ref": "E:..."}]}')
-    fb = llm_json(sys_fb, history_text(s), {"lines": []})
-    rows = [{"session_id": sid, **{k: str(l.get(k, "")) for k in ("agent", "dimension", "message", "evidence_ref")}}
+              '"message": "...", "evidence_ref": "E:...", "kind": "coaching|outside_fact", "source_url": "..."}]}')
+    fb = llm_json(sys_fb, f"Trainee log:\n{history_text(s)}\n\nOutside sources (from Telem web search):\n{source_text}", {"lines": []})
+    rows = [{"session_id": sid, **{k: str(l.get(k, "") or "") for k in AGENT_COLS[1:]}}
             for l in fb.get("lines", []) if isinstance(l, dict)]
     append_csv(AGENT_CSV, AGENT_COLS, rows)
 
@@ -294,3 +349,12 @@ def finish(sid: str):
             "scores": scores[0] if scores else None, "feedback": feedback, "blocked": blocked,
             "history": [{c: str(r.get(c, "")) for c in ("attempt", "total", "verdict")}
                         for r in query("select * from mart.verdict order by attempt")][-5:] if checks else []}
+
+
+# ---------- start the web app ----------
+# Run from the project folder:  uv run python backend/app.py
+# Then open http://127.0.0.1:8000 (set PORT=... to use another port).
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", "8000")))

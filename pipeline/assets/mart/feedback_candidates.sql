@@ -31,6 +31,6 @@ rules as (
   from sc where sc.safety_verification < 20 and exists (select 1 from ev e where e.session_id = sc.session_id and e.code = 'restart')
     and not exists (select 1 from ev e where e.session_id = sc.session_id and e.code = 'verify')
 )
-select * from rules
+select *, 'coaching' as kind, null::varchar as source_url from rules
 union all
-select session_id, agent, dimension, message, evidence_ref from raw.agent_feedback
+select session_id, agent, dimension, message, evidence_ref, coalesce(kind, 'coaching'), nullif(trim(source_url), '') from raw.agent_feedback

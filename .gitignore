@@ -10,3 +10,7 @@ logs/
 logs/runs
 logs/*.log
 *.py[cod]
+# Local tool settings (may contain tokens) - never publish
+.mcp.json
+.lingcode/
+.cursor/
