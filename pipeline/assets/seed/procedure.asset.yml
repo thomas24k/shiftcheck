@@ -1,0 +1,5 @@
+name: seed.procedure
+type: duckdb.seed
+description: Expert playbook (procedure) written by a senior maintenance technician.
+parameters:
+  path: ../../../playbook/procedure.csv

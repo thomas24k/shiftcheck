@@ -1,0 +1,5 @@
+name: raw.bearing_metrics
+type: duckdb.seed
+description: Bearing vibration metrics, Zenodo record 7589904 (International Hellenic University). One reading every 2 minutes.
+parameters:
+  path: ../../../data/bearing_vibration_metrics.csv

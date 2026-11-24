@@ -1,0 +1,9 @@
+solution_id,fault_state,action,rating,points,tradeoff_explained_by_coach
+S1,2,Lockout then regrease with the recommended amount then restart and verify against baseline,best,30,"Cheap and fast. Works only if the bearing is not yet damaged, so verification after restart is mandatory."
+S2,2,Lockout then replace the bearing,acceptable,20,"Safe and permanent, but more downtime and parts cost than needed if caught early."
+S3,2,Keep running and schedule a repair with monitoring,risky,5,"Acceptable only with manager sign-off and close monitoring. A dry bearing can seize quickly."
+S4,2,Add grease without lockout,unsafe,-30,"Never service a running or energized machine. The fix is right but the method can injure you."
+S5,3,Lockout then purge excess grease then run-in and check a-Peak and a-RMS return to baseline,best,30,"Removes the cause. Over-greasing creates heat from churning; the bearing needs a run-in period."
+S6,3,Lockout then replace the bearing,acceptable,15,"Solves it but wastes a healthy bearing and adds downtime."
+S7,3,Add more grease,wrong,-20,"The classic mistake: it makes overheating worse. Always confirm the pattern before repeating last time's fix."
+S8,any,Restart without comparing readings to baseline,incomplete,-10,"You cannot claim a fix without verification. Compare V-RMS, a-Peak and temperature with the healthy baseline."

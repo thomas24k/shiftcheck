@@ -1,0 +1,19 @@
+name: seed.solutions
+type: duckdb.seed
+description: Expert playbook (solutions) written by a senior maintenance technician.
+parameters:
+  path: ../../../playbook/solutions.csv
+columns:
+  - name: solution_id
+    checks: [{name: not_null}, {name: unique}]
+  - name: rating
+    checks:
+      - name: accepted_values
+        value: [best, acceptable, risky, unsafe, wrong, incomplete]
+custom_checks:
+  - name: each_fault_state_has_a_best_solution
+    description: States 2 and 3 must each have at least one "best" fix.
+    query: |
+      select count(*) from (values ('2'),('3')) s(st)
+      where not exists (select 1 from seed.solutions where fault_state::varchar = s.st and rating = 'best')
+    value: 0

@@ -1,0 +1,10 @@
+step_no,step,required,safety_critical,why
+1,Acknowledge alarm and read trends before acting,true,false,"Diagnosis starts with data, not with tools."
+2,State a hypothesis and rule out at least one alternative,true,false,"Prevents guessing and repeating last time's fix."
+3,Inform supervisor and request a stop,true,false,"Production must know before the line stops."
+4,Lockout/tagout the motor,true,true,"Isolates hazardous energy before anyone touches the machine."
+5,Try-start to verify zero energy,true,true,"Confirms the lockout actually worked."
+6,Inspect the bearing and grease condition,true,false,"Confirms or refutes the hypothesis physically."
+7,Apply the chosen fix,true,false,"Regrease, purge, or replace depending on diagnosis."
+8,Remove lockout and restart,true,true,"Only after tools are cleared and people are clear of moving parts."
+9,Verify readings against baseline,true,false,"The fix is not done until the data says so."

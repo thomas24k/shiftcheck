@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShiftCheck</title>
+<meta name="description" content="Three AI colleagues teach a new maintenance technician to reason through a real machine fault. Scored with Bruin on real bearing data.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#efece4; --panel:#faf8f3; --ink:#1d1f1c; --mute:#6b6e66; --line:#d8d3c6;
+  --steel:#3c4a52; --ok:#2f7a4f; --warn:#c7811b; --bad:#b8392b; --accent:#e5b21a;
+  --marco:#2f5d7c; --dana:#b8392b; --frank:#6a4f8a;
+}
+*{box-sizing:border-box} html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 "IBM Plex Sans",system-ui,sans-serif}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+header{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:18px;margin:0;letter-spacing:.02em}
+header h1 span{background:var(--accent);padding:0 6px;margin-right:6px}
+.pill{font-size:12px;padding:3px 9px;border:1px solid var(--line);border-radius:99px;color:var(--mute)}
+.spacer{flex:1}
+#cost{font-weight:600;color:var(--bad)}
+main{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;padding:16px 20px;max-width:1400px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin:0 0 10px}
+#machine svg{width:100%;height:auto;display:block}
+.part{cursor:pointer;transition:opacity .15s}
+.part:hover{opacity:.8}
+#alarm{display:none;background:var(--bad);color:#fff;padding:6px 10px;border-radius:4px;font-weight:600;margin-bottom:10px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.75}}
+#partinfo{font-size:13px;color:var(--mute);min-height:20px;margin-top:6px}
+.gauges{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px}
+.g{border:1px solid var(--line);border-radius:4px;padding:8px;background:#fff}
+.g .n{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+.g .v{font-size:20px;font-weight:600}
+.g .d{font-size:11px}
+.g svg{width:100%;height:34px;display:block;margin-top:4px}
+.up{color:var(--bad)} .flat{color:var(--mute)} .down{color:var(--marco)}
+.right{display:flex;flex-direction:column;gap:12px}
+.agent{display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:start}
+.av{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700}
+.who{font-size:13px;font-weight:600} .who small{font-weight:400;color:var(--mute)}
+.bubble{background:#fff;border:1px solid var(--line);border-radius:4px 12px 12px 12px;padding:8px 11px;margin-top:3px;min-height:36px;font-size:14px}
+.bubble.stop{border-color:var(--bad);background:#fbecea;font-weight:500}
+.bubble:empty::before{content:"…";color:var(--line)}
+#huddle{font-size:13px;color:var(--steel);border-left:3px solid var(--accent);padding:4px 10px;background:#fff;min-height:28px}
+#huddle p{margin:4px 0}
+.controls{grid-column:1/-1}
+.hrow{display:grid;grid-template-columns:200px 200px 1fr;gap:8px}
+select,input{font:inherit;padding:8px;border:1px solid var(--line);border-radius:4px;background:#fff;width:100%}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}
+button{font:inherit;font-weight:500;padding:8px 12px;border:1px solid var(--steel);border-radius:4px;background:#fff;color:var(--ink);cursor:pointer}
+button:hover:not(:disabled){background:var(--steel);color:#fff}
+button:active:not(:disabled){transform:translateY(1px)}
+button:disabled{opacity:.4;cursor:default}
+button.done{border-color:var(--ok);color:var(--ok)}
+button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+#fixchoice{width:auto}
+#log{font-size:12px;color:var(--mute);margin-top:8px}
+#overlay{display:none;position:fixed;inset:0;background:rgba(29,31,28,.55);overflow:auto;padding:30px 16px}
+#result{max-width:860px;margin:0 auto;background:var(--panel);border-radius:8px;padding:24px}
+.verdict{font-size:30px;font-weight:700;margin:0}
+.bar{display:grid;grid-template-columns:170px 1fr 50px;gap:10px;align-items:center;margin:6px 0;font-size:14px}
+.bar div{height:10px;background:var(--line);border-radius:5px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok)}
+.fb{border-top:1px solid var(--line);padding:9px 0;font-size:14px}
+.ev{font-size:12px;color:var(--mute)}
+.blocked{background:#fff4d6;border:1px solid var(--accent);padding:8px 12px;border-radius:4px;margin:12px 0;font-size:14px}
+.blocked s{color:var(--mute)}
+@media (max-width:900px){main{grid-template-columns:1fr}.gauges{grid-template-columns:repeat(3,1fr)}.hrow{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>ShiftCheck</span>Line 3, conveyor drive</h1>
+  <span class="pill" id="attemptpill">Attempt 1</span>
+  <span class="pill mono" id="clock">t+0 min</span>
+  <div class="spacer"></div>
+  <span class="pill">Downtime cost <span id="cost" class="mono">€0</span></span>
+</header>
+
+<main>
+  <section class="card" id="machine">
+    <h2>Machine (click a part)</h2>
+    <div id="alarm">⚠ VIBRATION ALARM: bearing housing</div>
+    <svg viewBox="0 0 640 230" role="img" aria-label="Geared motor driving a conveyor">
+      <rect x="0" y="200" width="640" height="8" fill="#c9c3b3"/>
+      <g class="part" data-part="motor"><rect x="20" y="70" width="150" height="100" rx="8" fill="#3c4a52"/>
+        <g fill="#56656d"><rect x="32" y="62" width="8" height="116"/><rect x="48" y="62" width="8" height="116"/><rect x="64" y="62" width="8" height="116"/></g>
+        <text x="95" y="125" fill="#fff" font-size="13" text-anchor="middle">MOTOR 0.75 kW</text></g>
+      <g class="part" data-part="coupling"><rect x="170" y="108" width="30" height="24" fill="#8a8f86"/><rect x="200" y="100" width="24" height="40" rx="3" fill="#e5b21a"/>
+        <text x="212" y="160" font-size="11" text-anchor="middle" fill="#6b6e66">coupling</text></g>
+      <g class="part" data-part="bearing"><circle cx="262" cy="120" r="30" fill="#5a6870"/><circle cx="262" cy="120" r="18" fill="#c9ced0"/><circle id="bearingglow" cx="262" cy="120" r="34" fill="none" stroke="#b8392b" stroke-width="4" opacity="0"/>
+        <text x="262" y="196" font-size="11" text-anchor="middle" fill="#6b6e66">bearing 6204</text></g>
+      <g class="part" data-part="grease"><rect x="256" y="68" width="12" height="20" fill="#2f7a4f"/><circle cx="262" cy="64" r="6" fill="#2f7a4f"/>
+        <text x="236" y="72" font-size="11" text-anchor="end" fill="#6b6e66">grease point</text></g>
+      <g class="part" data-part="reducer"><rect x="300" y="60" width="120" height="120" rx="6" fill="#4d5b63"/>
+        <text x="360" y="125" fill="#fff" font-size="13" text-anchor="middle">REDUCER i=80</text></g>
+      <g class="part" data-part="conveyor"><rect x="430" y="110" width="200" height="22" rx="11" fill="#2b2d2a"/>
+        <circle cx="442" cy="121" r="9" fill="#8a8f86"/><circle cx="618" cy="121" r="9" fill="#8a8f86"/>
+        <g id="boxes" fill="#c7811b"><rect x="470" y="88" width="26" height="22"/><rect x="540" y="88" width="26" height="22"/></g></g>
+      <g id="lockg" opacity="0"><rect x="60" y="20" width="70" height="34" rx="4" fill="#b8392b"/><text x="95" y="42" fill="#fff" font-size="13" text-anchor="middle" font-weight="700">LOCKED</text></g>
+    </svg>
+    <div id="partinfo">Sensor sits on the bearing housing next to the grease point.</div>
+    <div class="gauges" id="gauges"></div>
+  </section>
+
+  <section class="right">
+    <div class="card">
+      <h2>Your colleagues</h2>
+      <div class="agent"><div class="av" style="background:var(--marco)">M</div><div><div class="who">Marco <small>senior technician, coach</small></div><div class="bubble" id="b-marco">Alarm on line 3. Before you grab a tool: what are the gauges telling you?</div></div></div>
+      <div class="agent" style="margin-top:10px"><div class="av" style="background:var(--dana)">D</div><div><div class="who">Dana <small>safety inspector</small></div><div class="bubble" id="b-dana"></div></div></div>
+      <div class="agent" style="margin-top:10px"><div class="av" style="background:var(--frank)">F</div><div><div class="who">Frank <small>plant manager</small></div><div class="bubble" id="b-frank"></div></div></div>
+    </div>
+    <div class="card"><h2>Huddle (what they say about you)</h2><div id="huddle"></div></div>
+  </section>
+
+  <section class="card controls">
+    <h2>Before every action: your hypothesis</h2>
+    <div class="hrow">
+      <select id="hyp" aria-label="I think it is"></select>
+      <select id="ruled" aria-label="I ruled out"></select>
+      <input id="why" placeholder="…because (cite the data: e.g. a-Peak is +40% but a-RMS is normal)" maxlength="200">
+    </div>
+    <div class="actions" id="actions">
+      <button data-a="read_trends">Read trends</button>
+      <button data-a="inform">Inform supervisor &amp; request stop</button>
+      <button data-a="lockout">Lockout / tagout</button>
+      <button data-a="try_start">Try-start (verify zero energy)</button>
+      <button data-a="inspect">Inspect bearing</button>
+      <select id="fixchoice" aria-label="Fix">
+        <option value="regrease">Regrease (recommended amount)</option>
+        <option value="purge">Purge excess grease</option>
+        <option value="replace">Replace bearing</option>
+        <option value="keep_running">Keep running, schedule repair</option>
+        <option value="grease_no_lockout">Grease it now while running</option>
+      </select>
+      <button data-a="fix">Apply fix</button>
+      <button data-a="restart">Remove lockout &amp; restart</button>
+      <button data-a="verify">Verify vs baseline</button>
+      <div class="spacer"></div>
+      <button class="primary" id="finish">End shift &amp; get scored</button>
+    </div>
+    <div id="log" class="mono"></div>
+  </section>
+</main>
+
+<div id="overlay"><div id="result"></div></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const METRICS = [["a_peak","a-Peak"],["crest","Crest"],["a_rms","a-RMS"],["v_rms","V-RMS"],["temperature","Temp °C"]];
+const PARTS = {motor:"Bonfiglioli BN80B4, 0.75 kW, 1450 rpm.", coupling:"Flexible coupling between motor and bearing shaft.",
+  bearing:"6204 2RS ball bearing. The vibration sensor is on this housing.", grease:"Grease nipple. Recommended amount: 2 g.",
+  reducer:"Gear reducer, ratio 80:1.", conveyor:"Line 3 product conveyor. If it stops, Frank's cost meter runs."};
+let S = {history:[], attempt:1, prev:null, sid:null, tl:[], tick:50, timer:null, base:{}, cost:0, stopped:false, alarm:false, busy:false};
+
+async function api(path, body){
+  const r = await fetch(path, body===undefined?{}:{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error((await r.json()).detail||r.statusText);
+  return r.json();
+}
+function say(who, text){ const b=$("#b-"+who); if(text===undefined) return; b.textContent=text||""; b.classList.toggle("stop", who==="dana" && /^STOP/.test(text||"")); }
+function huddle(t){ if(!t) return; const p=document.createElement("p"); p.textContent=t; $("#huddle").prepend(p); }
+
+function spark(metric){
+  const vals = S.tl.slice(Math.max(0,S.tick-40), S.tick+1).map(r=>r[metric]);
+  const b = S.base[metric]; const all=[...vals,b.low,b.high]; const mn=Math.min(...all), mx=Math.max(...all), rg=(mx-mn)||1;
+  const y=v=>32-((v-mn)/rg)*30;
+  const pts = vals.map((v,i)=>`${(i/(Math.max(vals.length-1,1)))*100},${y(v)}`).join(" ");
+  return `<svg viewBox="0 0 100 34" preserveAspectRatio="none"><rect x="0" y="${y(b.high)}" width="100" height="${Math.max(1,y(b.low)-y(b.high))}" fill="#2f7a4f" opacity=".15"/><polyline points="${pts}" fill="none" stroke="#1d1f1c" stroke-width="1.4" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function render(){
+  const r = S.tl[S.tick]; if(!r) return;
+  $("#gauges").innerHTML = METRICS.map(([m,label])=>{
+    const b=S.base[m], pct=100*(r[m]-b.mean)/b.mean, out=r[m]>b.high||r[m]<b.low;
+    const cls = !out?"flat":pct>0?"up":"down";
+    const fmt = m==="v_rms"? (r[m]*1000).toFixed(2)+"m" : r[m].toFixed(m==="temperature"?1:2);
+    return `<div class="g"><div class="n">${label}</div><div class="v mono">${fmt}</div><div class="d ${cls}">${pct>=0?"+":""}${pct.toFixed(0)}% vs healthy</div>${spark(m)}</div>`;
+  }).join("");
+  $("#clock").textContent = `t+${S.tick*2} min · reading #${r.reading_id}`;
+  if(!S.alarm && r.bearing_state>1 && S.tick>=S.faultAt+3){ S.alarm=true; $("#alarm").style.display="block"; $("#bearingglow").setAttribute("opacity","1");
+    say("marco","Alarm on the bearing. Read the trends before you touch anything. Which readings moved, and which didn't?"); }
+  if(S.alarm) { S.cost += S.stopped? 360 : 90; $("#cost").textContent = "€"+S.cost.toLocaleString(); }
+}
+function loop(){ clearInterval(S.timer); S.timer=setInterval(()=>{ if(S.tick<S.tl.length-1){S.tick++; render();} }, 1200); }
+
+async function start(){
+  $("#overlay").style.display="none"; $("#huddle").innerHTML=""; $("#log").textContent="";
+  document.querySelectorAll("[data-a]").forEach(b=>b.classList.remove("done"));
+  $("#lockg").setAttribute("opacity","0"); $("#alarm").style.display="none"; $("#bearingglow").setAttribute("opacity","0");
+  const d = await api("/api/session", {attempt:S.attempt, previous_session:S.prev});
+  Object.assign(S, {sid:d.session_id, tl:d.timeline, faultAt:d.fault_starts_at_tick, tick:d.fault_starts_at_tick-8, cost:0, stopped:false, alarm:false});
+  $("#attemptpill").textContent = `Attempt ${S.attempt} · scenario ${d.scenario}`;
+  say("frank", d.frank); say("dana",""); huddle(d.huddle);
+  say("marco", "Shift starting. Keep an eye on the gauges; the green band is the healthy range.");
+  render(); loop();
+}
+
+async function doAction(a){
+  if(S.busy) return;
+  const why=$("#why").value.trim();
+  if(!why){ $("#why").focus(); $("#why").placeholder="Write your reason first: I think it's X because Y"; return; }
+  S.busy=true; document.querySelectorAll("#actions button").forEach(b=>b.disabled=true);
+  try{
+    const d = await api(`/api/session/${S.sid}/act`, {hypothesis_id:$("#hyp").value, ruled_out_id:$("#ruled").value||null,
+      hypothesis_text:why, action:a, fix_choice:a==="fix"?$("#fixchoice").value:null, tick:S.tick});
+    say("marco",d.marco); say("dana",d.dana); say("frank",d.frank); huddle(d.huddle);
+    if(!d.unsafe){ document.querySelector(`[data-a="${a}"]`).classList.add("done");
+      if(a==="inform") S.stopped=true;
+      if(a==="lockout"){ $("#lockg").setAttribute("opacity","1"); S.stopped=true; }
+      if(a==="restart"){ $("#lockg").setAttribute("opacity","0"); S.stopped=false; jumpToFixed(); }
+    }
+    $("#log").textContent = `${d.event_id}: ${a} → ${d.result}\n` + $("#log").textContent;
+  }catch(e){ alert(e.message); }
+  S.busy=false; document.querySelectorAll("#actions button").forEach(b=>b.disabled=false);
+}
+// After a restart, show what the data looks like: healthy again only if the right fix was applied.
+function jumpToFixed(){
+  const good = $("#log").textContent.match(/playbook (S1|S5) /);
+  if(good){ const healthy = S.tl.slice(0,S.faultAt); S.tl = S.tl.slice(0,S.tick+1).concat(healthy, healthy); S.alarm=false;
+    $("#alarm").style.display="none"; $("#bearingglow").setAttribute("opacity","0"); }
+}
+
+async function finish(){
+  clearInterval(S.timer); $("#finish").disabled=true; $("#finish").textContent="Bruin is scoring…";
+  try{
+    const d = await api(`/api/session/${S.sid}/finish`, {});
+    showResult(d);
+  }catch(e){ alert(e.message); }
+  $("#finish").disabled=false; $("#finish").textContent="End shift & get scored";
+}
+const DIMS=[["diagnosis","Diagnosis"],["ruled_out","Ruled-out alternatives"],["evidence","Use of evidence"],["fix_choice","Fix choice"],["safety_verification","Safety & verification"]];
+const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function showResult(d){
+  const v=d.verdict, s=d.scores;
+  if(v) S.history.push(v);
+  if(!v){ $("#result").innerHTML=`<p>Bruin could not score this session.</p><pre>${esc(d.bruin_log)}</pre><button onclick="location.reload()">Restart</button>`; $("#overlay").style.display="block"; return; }
+  const color = v.verdict==="Certified"?"var(--ok)":"var(--bad)";
+  $("#result").innerHTML = `
+    <p class="ev">Attempt ${v.attempt} · scenario ${v.scenario} · scored by Bruin (${d.bruin_ok?"all quality checks passed":"some checks failed"})</p>
+    <p class="verdict" style="color:${color}">${v.verdict} · ${v.total}/100</p>
+    <div style="margin:14px 0">${DIMS.map(([k,l])=>`<div class="bar"><span>${l}</span><div><i style="width:${s[k]*5}%;background:${s[k]>=15?"var(--ok)":s[k]>=10?"var(--warn)":"var(--bad)"}"></i></div><b class="mono">${s[k]}/20</b></div>`).join("")}</div>
+    ${v.blocked_lines?`<div class="blocked"><b>${v.blocked_lines} unsupported feedback line${v.blocked_lines>1?"s":""} blocked by Bruin</b> (cited evidence that doesn't exist):<br>${d.blocked.map(b=>`<s>${esc(b.agent)}: ${esc(b.message)}</s> <span class="mono">${esc(b.evidence_ref)}</span>`).join("<br>")}</div>`:""}
+    <h3 style="margin:14px 0 4px">Feedback (every line linked to your log)</h3>
+    ${d.feedback.map(f=>`<div class="fb"><b>${esc(f.agent==="rules"?"Playbook":f.agent)}</b> · ${esc(f.dimension)}<br>${esc(f.message)}
+      <div class="ev mono">↳ ${esc(f.evidence_ref)}: ${esc(f.code||"hypothesis "+f.hypothesis_id)} ${f.event_text?"“"+esc(f.event_text)+"”":""} · sensor reading #${esc(f.reading_id)}</div></div>`).join("")}
+    <p class="ev" style="margin-top:14px">Progress: ${S.history.map(h=>`attempt ${h.attempt}: ${h.total} (${h.verdict})`).join(" → ")}</p>
+    <p class="ev">Weakest skill: <b>${esc(v.weakest_dimension)}</b>. The team will pick your next scenario from it.</p>
+    <button class="primary" id="next">Start attempt ${v.attempt+1}</button>`;
+  $("#overlay").style.display="block";
+  $("#next").onclick=()=>{ S.prev=v.session_id; S.attempt=v.attempt+1; start(); };
+}
+
+(async function init(){
+  const d = await api("/api/setup"); S.base=d.baseline;
+  $("#hyp").innerHTML = d.hypotheses.map(h=>`<option value="${h.hypothesis_id}">I think: ${esc(h.hypothesis)}</option>`).join("");
+  $("#ruled").innerHTML = `<option value="">I ruled out: (nothing yet)</option>` + d.hypotheses.map(h=>`<option value="${h.hypothesis_id}">Ruled out: ${esc(h.hypothesis)}</option>`).join("");
+  document.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>doAction(b.dataset.a));
+  document.querySelectorAll(".part").forEach(p=>p.onclick=()=>$("#partinfo").textContent=PARTS[p.dataset.part]);
+  $("#finish").onclick=finish;
+  start();
+})();
+</script>
+</body>
+</html>

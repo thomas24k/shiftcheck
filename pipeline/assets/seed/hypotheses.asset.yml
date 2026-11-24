@@ -1,0 +1,11 @@
+name: seed.hypotheses
+type: duckdb.seed
+description: Expert playbook (hypotheses) written by a senior maintenance technician.
+parameters:
+  path: ../../../playbook/hypotheses.csv
+columns:
+  - name: hypothesis_id
+    checks: [{name: not_null}, {name: unique}]
+  - name: ruled_out_when
+    description: Every hypothesis must say how to rule it out.
+    checks: [{name: not_null}]
